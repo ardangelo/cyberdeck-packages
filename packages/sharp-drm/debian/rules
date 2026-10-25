@@ -12,17 +12,17 @@ override_dh_auto_build:
 	$(MAKE) -C "$(K230_KERNEL_DIR)" M="$(CURDIR)" ARCH=riscv CROSS_COMPILE="$(K230_CROSS_COMPILE)" modules
 
 override_dh_auto_install:
+	test -f "$(K230_KERNEL_CONTEXT)"
+	python3 -c 'import json,re,sys; context=json.load(open(sys.argv[1], encoding="utf-8")); version=sys.argv[3]; abi=context["abi_sha256"]; assert re.fullmatch(r"[0-9a-f]{64}", abi) and context["kernel_release"] == sys.argv[2] and re.fullmatch(r"1\.7\+cyberdeck\.(?:0|[1-9][0-9]*)\+abi\." + abi + r"-1", version), "Sharp version, kernel release and context ABI must match"' "$(K230_KERNEL_CONTEXT)" "$(K230_KERNEL_RELEASE)" "$$(dpkg-parsechangelog -S Version)"
 	install -D -m 0644 sharp-drm.ko "debian/tmp/lib/modules/$(K230_KERNEL_RELEASE)/updates/sharp-drm.ko"
 	install -D -m 0644 debian/config/modules-load.conf "debian/tmp/etc/modules-load.d/k230-sharp-drm.conf"
 	install -D -m 0644 debian/config/modprobe.conf "debian/tmp/etc/modprobe.d/k230-sharp-drm.conf"
-	printf '%s\n' "$(K230_KERNEL_RELEASE)" > debian/k230-kernel-abi.release
-	install -D -m 0644 debian/k230-kernel-abi.release "debian/tmp/usr/share/k230-kernel-abi/$(K230_KERNEL_RELEASE)"
+	install -D -m 0644 "$(K230_KERNEL_CONTEXT)" "debian/tmp/usr/share/k230-kernel-abi/kernel-context.json"
 
 override_dh_auto_clean:
 	if test -n "$(K230_KERNEL_DIR)" && test -f "$(K230_KERNEL_DIR)/Makefile"; then \
 		$(MAKE) -C "$(K230_KERNEL_DIR)" M="$(CURDIR)" ARCH=riscv CROSS_COMPILE="$(K230_CROSS_COMPILE)" clean; \
 	fi
-	rm -f debian/k230-kernel-abi.release
 
 override_dh_strip:
 	# Preserve the kernel module exactly as produced by Kbuild.

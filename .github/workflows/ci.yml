@@ -1,0 +1,73 @@
+name: Package CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.package }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [status-ready, cyberdeck-service, sharp-drm]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Build from locked public sources
+        env:
+          CI: 'true'
+        run: python3 scripts/build-packages.py --package "${{ matrix.package }}" --release-number 0 --output output --development
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: build-${{ matrix.package }}
+          path: output/${{ matrix.package }}/
+          if-no-files-found: error
+          retention-days: 1
+
+  verify:
+    name: Verify packages and smoke
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Install verification and QEMU host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends mmdebstrap qemu-user-static openjdk-21-jdk-headless g++-riscv64-linux-gnu kmod gnupg dpkg-dev debian-archive-keyring
+      - name: Run isolated behavioral tests
+        run: python3 -m unittest discover -s tests -v
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: build-status-ready
+          path: incoming/status-ready
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: build-cyberdeck-service
+          path: incoming/cyberdeck-service
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: build-sharp-drm
+          path: incoming/sharp-drm
+      - name: Verify same-run sources, binaries, and ABI
+        run: python3 scripts/verify-artifacts.py --artifacts incoming --output verified --release-number 0
+      - name: Exercise real target package transactions
+        run: sudo python3 scripts/smoke-packages.py --input verified --output smoke-evidence

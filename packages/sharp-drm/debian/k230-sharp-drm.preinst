@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    install|upgrade)
+        # The image owns this file; a package must never create or repair it.
+        if ! printf '%s\n' '@ABI_SHA256@' | cmp -s - /usr/share/k230/kernel-abi; then
+            echo 'K230 kernel ABI identity missing or different; refusing Sharp module' >&2
+            exit 1
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

@@ -1,0 +1,116 @@
+name: Publish APT
+
+on:
+  workflow_call:
+    inputs:
+      dry_run:
+        description: Verify and assemble without signing or deploying
+        required: false
+        type: boolean
+        default: false
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Verify and assemble without signing or deploying
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    - cron: '17 4 * * 1,4'
+
+permissions:
+  contents: read
+
+# The complete read/assemble/sign/deploy transaction is serialized; each run
+# re-enumerates immutable Releases after acquiring this lock.
+concurrency:
+  group: cyberdeck-apt-publication
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    name: Authorize publication event
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Require protected publication main
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          [[ "$EVENT_REF" == refs/heads/main && ( "$EVENT_NAME" == workflow_dispatch || "$EVENT_NAME" == schedule ) ]] || {
+            echo 'Publication requires trusted main' >&2
+            exit 1
+          }
+
+  dry-run:
+    name: Validate APT publication (dry run)
+    if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
+    needs: authorize
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: refs/heads/main
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Install index and signature verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends apt-utils gnupg
+      - name: Verify all eligible Releases and assemble without signing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish-repository.py --repository ardangelo/cyberdeck-packages --repository-config repository.json --public-key keys/cyberdeck-archive.asc --output site --dry-run
+
+  assemble:
+    name: Assemble and sign APT site
+    if: github.event_name != 'workflow_dispatch' || inputs.dry_run != true
+    needs: authorize
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    environment: apt-publish
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: refs/heads/main
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Install index and signing tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends apt-utils gnupg
+      - name: Verify immutable Releases and sign complete APT site
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+          APT_GPG_PASSPHRASE: ${{ secrets.APT_GPG_PASSPHRASE }}
+          APT_GPG_SIGNING_FINGERPRINT: ${{ vars.APT_GPG_SIGNING_FINGERPRINT }}
+        run: python3 scripts/publish-repository.py --repository ardangelo/cyberdeck-packages --repository-config repository.json --public-key keys/cyberdeck-archive.asc --output site
+      - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b
+        with:
+          path: site/
+
+  deploy:
+    name: Deploy GitHub Pages
+    needs: assemble
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b
+      - id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "service": {
     "repository": "https://github.com/ardangelo/cyberdeck-service.git",
-    "revision": "3f596248ad628b8d167926ede0b22bb3d0ffa72d"
+    "revision": "e4477f11c6690242d7f0a0e2c73b0643b4e5abed"
   },
   "sdk": {
     "repository": "https://github.com/ardangelo/k230-linux.git",

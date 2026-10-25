@@ -1,3 +1,4 @@
+import io
 import importlib.util
 from pathlib import Path
 import tarfile
@@ -31,6 +32,42 @@ class SourceArchiveTests(unittest.TestCase):
             (root / 'private/main.c').write_text('int main(void) { return 1; }\n')
             sources.archive(root / 'private', root / 'changed.tar.gz', 'source-1.0', 1754697600)
             self.assertNotEqual((root / 'private.tar.gz').read_bytes(), (root / 'changed.tar.gz').read_bytes())
+
+    def test_source_extraction_rejects_escape_and_special_entries_before_writing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            destination = base / 'source'
+            destination.mkdir()
+            outside = base / 'outside'
+            outside.mkdir()
+            sentinel = outside / 'sentinel'
+            sentinel.write_bytes(b'untouched')
+            (destination / 'jump').symlink_to(outside, target_is_directory=True)
+            attacks = [
+                ('../outside/sentinel', tarfile.REGTYPE, ''),
+                (str(sentinel), tarfile.REGTYPE, ''),
+                ('jump/sentinel', tarfile.REGTYPE, ''),
+                ('escape', tarfile.SYMTYPE, '../outside'),
+                ('absolute-link', tarfile.SYMTYPE, str(outside)),
+                ('hardlink', tarfile.LNKTYPE, 'jump/sentinel'),
+                ('device', tarfile.CHRTYPE, ''),
+                ('pipe', tarfile.FIFOTYPE, ''),
+            ]
+            for name, kind, link in attacks:
+                with self.subTest(name=name):
+                    entry = tarfile.TarInfo(name)
+                    entry.type = kind
+                    entry.linkname = link
+                    entry.size = 7 if kind == tarfile.REGTYPE else 0
+                    data = io.BytesIO()
+                    with tarfile.open(fileobj=data, mode='w') as archive:
+                        archive.addfile(entry, io.BytesIO(b'changed') if entry.isfile() else None)
+                    data.seek(0)
+                    with tarfile.open(fileobj=data) as archive:
+                        with self.assertRaises(ValueError):
+                            sources.extract_member(archive, archive.next(), destination)
+                    self.assertEqual(sentinel.read_bytes(), b'untouched')
+            self.assertEqual({path.name for path in destination.iterdir()}, {'jump'})
 
 
 if __name__ == '__main__':

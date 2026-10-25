@@ -2,7 +2,7 @@ Source: sharp-drm
 Section: kernel
 Priority: optional
 Maintainer: Andrew D'Angelo <dangeloandrew@outlook.com>
-Build-Depends: debhelper-compat (= 13)
+Build-Depends: debhelper-compat (= 13), python3:any
 Standards-Version: 4.7.0
 Rules-Requires-Root: no
 Homepage: https://github.com/ardangelo/sharp-drm-driver
@@ -11,8 +11,9 @@ Package: k230-kernel-abi
 Architecture: riscv64
 Depends: ${misc:Depends}
 Description: K230 kernel ABI marker
- Records the exact configured K230 kernel release used by out-of-tree module
- packages. It does not provide a kernel image.
+ Records the expected configured K230 kernel context and its full ABI hash
+ for out-of-tree modules. It does not provide a kernel image or install the
+ image-owned ABI identity.
 
 Package: k230-sharp-drm
 Architecture: riscv64

@@ -104,6 +104,26 @@ def included(name: str, *, debian: bool) -> bool:
     return True
 
 
+def extract_member(archive: tarfile.TarFile, member: tarfile.TarInfo, destination: Path) -> None:
+    """Apply source-only extraction rules on Python 3.10 as well as newer hosts."""
+    name = PurePosixPath(member.name)
+    root = destination.resolve()
+    if name.is_absolute() or '..' in name.parts:
+        raise ValueError(f'unsafe source archive path: {member.name}')
+    target = destination / member.name
+    if not target.resolve().is_relative_to(root):
+        raise ValueError(f'source archive path escapes destination: {member.name}')
+    if not (member.isdir() or member.isfile() or member.issym()):
+        raise ValueError(f'unsupported source archive entry: {member.name}')
+    if member.issym():
+        link = PurePosixPath(member.linkname)
+        if link.is_absolute() or not (target.parent / member.linkname).resolve().is_relative_to(root):
+            raise ValueError(f'source archive symlink escapes destination: {member.name}')
+    archive.extract(member, destination, set_attrs=False)
+    if not member.issym():
+        target.chmod(0o755 if member.isdir() or member.mode & 0o111 else 0o644)
+
+
 def export(root: Path, destination: Path, *, debian: bool = True) -> None:
     """Resolve gitlinks from separately archived trees; never copy worktree output."""
     destination.mkdir(parents=True, exist_ok=True)
@@ -114,7 +134,7 @@ def export(root: Path, destination: Path, *, debian: bool = True) -> None:
         with tarfile.open(fileobj=process.stdout, mode='r|') as archive:
             for member in archive:
                 if included(member.name, debian=debian):
-                    archive.extract(member, destination, filter='data')
+                    extract_member(archive, member, destination)
         if process.wait() != 0:
             raise RuntimeError(f'git archive failed: {root}')
     marker = destination / 'source-revision.txt'
