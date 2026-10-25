@@ -14,6 +14,8 @@ another service `debian/` here.
   40-character commit over anonymous GitHub HTTPS. It initializes the declared
   gitlinks and rejects dirty checkouts or revision mismatches. Its returned
   submodule provenance comes from those gitlinks, not a parallel pin list.
+  Readiness-only fetches use `recursive=False`: they verify the SDK commit and
+  clean parent checkout without fetching unrelated source submodules.
 - `export(checkout, destination, debian=True)` exports tracked files through
   separate Git archives for the parent and each submodule. It excludes local
   configuration, caches, generated native/protocol objects, build directories

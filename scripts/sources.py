@@ -52,12 +52,14 @@ def submodules(root: Path) -> list[tuple[Path, str]]:
     return sorted(result)
 
 
-def verify_checkout(root: Path, expected: str) -> list[dict[str, str]]:
+def verify_checkout(root: Path, expected: str, *, recursive: bool = True) -> list[dict[str, str]]:
     actual = git(root, 'rev-parse', 'HEAD')
     if actual != expected:
         raise ValueError(f'{root}: expected {expected}, found {actual}')
     if git(root, 'status', '--porcelain', '--untracked-files=all'):
         raise ValueError(f'dirty source checkout: {root}')
+    if not recursive:
+        return []
     provenance = []
     for relative, revision in submodules(root):
         child = root / relative
@@ -80,7 +82,7 @@ def fetch(repository: str, revision: str, destination: Path, *, recursive: bool 
     if recursive:
         git(destination, '-c', 'protocol.file.allow=never', '-c', 'protocol.ssh.allow=never',
             'submodule', 'update', '--init', '--recursive', '--depth=1')
-    return verify_checkout(destination, revision)
+    return verify_checkout(destination, revision, recursive=recursive)
 
 
 def included(name: str, *, debian: bool) -> bool:

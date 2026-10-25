@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "service": {
+    "repository": "https://github.com/ardangelo/cyberdeck-service.git",
+    "revision": "3f596248ad628b8d167926ede0b22bb3d0ffa72d"
+  },
+  "sdk": {
+    "repository": "https://github.com/ardangelo/k230-linux.git",
+    "revision": "5ae48d5709cbcdb4db9a161e24b222fd9cfbedae",
+    "conf": "k230_canmv_01studio_defconfig"
+  },
+  "sharp": {
+    "repository": "https://github.com/ardangelo/sharp-drm-driver.git",
+    "revision": "98c43928e3110fe0db90003c6dc5727bf4cae082"
+  },
+  "toolchain": {
+    "url": "https://download.kendryte.com/k230/downloads/dl/gcc/Xuantie-900-gcc-linux-6.6.0-glibc-x86_64-V3.0.2-20250410.tar.gz",
+    "sha256": "2215e1ffe1b9b9277b1f5af2f61102e83973163404f29b04da7097fdafa9e1b7",
+    "prefix": "riscv64-unknown-linux-gnu"
+  },
+  "debian_snapshot": "20250809T000000Z",
+  "containers": {
+    "service": "debian:trixie-slim@sha256:4876fdea29cac1a33a3195f1eb1952feb1fca7dd6dd00be3e2f1879cf20d34d2",
+    "kernel": "ubuntu:22.04@sha256:98510ac07bb4545e389be502a8918b385c018bfe4ceeb5ac7e0375c782268b04"
+  },
+  "tools": {
+    "temurin17": {
+      "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.21%2B9/OpenJDK17U-jdk_x64_linux_hotspot_17.0.21_9.tar.gz",
+      "sha256": "8b9b611d917e3dfd8419d3566b5949226f69b052fed7e109c1368add1dfe8711"
+    },
+    "android_commandline": {
+      "url": "https://dl.google.com/android/repository/commandlinetools-linux-16111833_latest.zip",
+      "sha256": "0877a1d048fe4a24efe2eff536ca4223f7adeb58648bb81909d33c446918cfa8"
+    },
+    "android_platform36": {
+      "url": "https://dl.google.com/android/repository/platform-36_r02.zip",
+      "sha256": "37607369a28c5b640b3a7998868d45898ebcb777565a0e85f9acf36f29631d2e"
+    },
+    "gradle": {
+      "url": "https://services.gradle.org/distributions/gradle-8.14.4-bin.zip",
+      "sha256": "f1771298a70f6db5a29daf62378c4e18a17fc33c9ba6b14362e0cdf40610380d"
+    }
+  }
+}
