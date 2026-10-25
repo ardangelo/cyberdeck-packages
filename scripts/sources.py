@@ -21,7 +21,11 @@ EXCLUDED_NAMES = {
 
 
 def git(root: Path, *args: str) -> str:
-    return subprocess.check_output(['git', '-C', str(root), *args], text=True).strip()
+    command = ['git', '-C', str(root), *args]
+    result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if result.returncode:
+        raise RuntimeError(f'Git source command failed in {root}: {result.stderr.strip()}')
+    return result.stdout.strip()
 
 
 def validate_revision(repository: str, revision: str) -> None:
