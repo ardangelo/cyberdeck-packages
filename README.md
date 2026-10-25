@@ -18,6 +18,10 @@ another service `debian/` here.
   separate Git archives for the parent and each submodule. It excludes local
   configuration, caches, generated native/protocol objects, build directories
   and distribution JARs. The tracked Gradle wrapper JAR remains included.
+  Each exported repository receives `source-revision.txt` containing its exact
+  commit. Git-free Gradle builds use the mobile submodule's own marker;
+  maintained repositories keep their real gitlinks and contain no generated
+  marker. A conflicting marker or changed gitlink fails export.
 - `archive(source, output, prefix, epoch)` writes a deterministic gzip-compressed
   source archive with normalized owners, timestamps and permissions, preserving
   executable bits. Set `debian=False` when

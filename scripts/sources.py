@@ -105,6 +105,7 @@ def included(name: str, *, debian: bool) -> bool:
 def export(root: Path, destination: Path, *, debian: bool = True) -> None:
     """Resolve gitlinks from separately archived trees; never copy worktree output."""
     destination.mkdir(parents=True, exist_ok=True)
+    revision = git(root, 'rev-parse', 'HEAD')
     command = ['git', '-C', str(root), 'archive', '--format=tar', 'HEAD']
     with subprocess.Popen(command, stdout=subprocess.PIPE) as process:
         assert process.stdout is not None
@@ -114,9 +115,16 @@ def export(root: Path, destination: Path, *, debian: bool = True) -> None:
                     archive.extract(member, destination, filter='data')
         if process.wait() != 0:
             raise RuntimeError(f'git archive failed: {root}')
-    for relative, _revision in submodules(root):
+    marker = destination / 'source-revision.txt'
+    if marker.exists() or marker.is_symlink():
+        raise ValueError(f'source revision marker conflicts with tracked or existing input: {marker}')
+    marker.write_text(revision + '\n')
+    for relative, expected in submodules(root):
         if included(relative.as_posix(), debian=debian):
-            export(root / relative, destination / relative, debian=debian)
+            child = root / relative
+            if git(child, 'rev-parse', 'HEAD') != expected:
+                raise ValueError(f'gitlink revision changed before export: {relative}')
+            export(child, destination / relative, debian=debian)
 
 
 def archive(source: Path, output: Path, prefix: str, epoch: int) -> None:
