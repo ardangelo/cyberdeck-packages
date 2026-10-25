@@ -144,7 +144,7 @@ different image and APT suite even if `kernel_release` stays the same.
 
 The target smoke requires `mmdebstrap`, the Debian archive keyring, static
 RISC-V QEMU with working binfmt registration, a RISC-V C++ compiler, GnuPG,
-kmod, root privileges and permission to mount a temporary read-only `/proc`.
+native `systemctl`, kmod, root privileges and permission to mount read-only `/proc`.
 Use a capable Linux host or container; there is no mountless PRoot fallback.
 It extracts the signed base archives, completes mmdebstrap's essential stage
 and requires a configured, dependency-consistent dpkg database before installing

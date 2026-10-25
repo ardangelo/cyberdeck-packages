@@ -321,6 +321,9 @@ def main() -> None:
         record = build(args.package, number, args.output.resolve(), lock)
         print(json.dumps({"package": record["package"], "artifacts": len(record["artifacts"])}, sort_keys=True))
     except (ValueError, OSError, subprocess.CalledProcessError, RuntimeError, KeyError) as error:
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            message = str(error).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+            print(f"::error::{message}")
         parser.exit(1, f"build-packages: {error}\n")
 
 
