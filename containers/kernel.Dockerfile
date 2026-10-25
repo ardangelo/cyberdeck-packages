@@ -8,7 +8,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       ca-certificates curl git make build-essential binutils patch diffutils \
+       ca-certificates curl wget git make build-essential binutils patch diffutils \
        bzip2 gzip xz-utils zstd tar cpio unzip rsync file bc gawk \
        bison flex libssl-dev libncurses-dev python3 perl \
        debhelper dpkg-dev fakeroot kmod \

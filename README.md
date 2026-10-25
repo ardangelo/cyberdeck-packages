@@ -135,6 +135,9 @@ The ABI covers the kernel source revision/release, actual configuration and
 symbols, authored kernel inputs and compiler identity/bytes. It excludes SDK
 commit, build paths, package versions and timestamps.
 
+The kernel container provides `wget` for SDK source downloads, alongside `curl`
+for the checksum-verified toolchain download.
+
 Both ABI-specific packages reject installation or upgrade unless the
 image-owned `/usr/share/k230/kernel-abi` contains exactly their expected hash
 with a final newline. Neither package owns that file or supplies a kernel.
