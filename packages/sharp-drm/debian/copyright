@@ -1,0 +1,19 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: sharp-drm-driver
+Source: https://github.com/ardangelo/sharp-drm-driver
+
+Files: *
+Copyright: 2023-2026 Andrew D'Angelo and contributors
+License: GPL-2.0
+
+Files: debian/*
+Copyright: 2026 K230 Linux maintainers
+License: GPL-2.0
+
+License: GPL-2.0
+ This program is free software; you can redistribute it and/or modify it under
+ the terms of the GNU General Public License version 2 as published by the Free
+ Software Foundation.
+ .
+ The complete text is available in /usr/share/common-licenses/GPL-2 on Debian
+ systems.

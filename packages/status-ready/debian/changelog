@@ -1,0 +1,5 @@
+k230-status-ready (1.0+cyberdeck.0-1) unstable; urgency=medium
+
+  * Package the canonical SDK helper with debhelper-managed systemd lifecycle.
+
+ -- Andrew D'Angelo <dangeloandrew@outlook.com>  Sat, 09 Aug 2025 00:00:00 +0000

@@ -30,7 +30,7 @@ RUN test "$DEBIAN_SNAPSHOT" = 20250809T000000Z \
     && dpkg --add-architecture riscv64 \
     && apt-get -o APT::Update::Error-Mode=any update \
     && apt-get install -y --allow-downgrades --no-install-recommends \
-       ca-certificates curl git debhelper dpkg-dev fakeroot \
+       ca-certificates curl git debhelper dpkg-dev fakeroot build-essential \
        crossbuild-essential-riscv64 openjdk-21-jdk-headless \
        protobuf-compiler python3 python3-protobuf unzip xz-utils \
        libc6:riscv64 libstdc++6:riscv64 \

@@ -1,0 +1,3 @@
+# Linux kernel objects use the RISC-V soft-float ABI even though Debian riscv64
+# user space uses lp64d; the relocatable object is built for the correct CPU.
+k230-sharp-drm: binary-from-other-architecture

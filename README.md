@@ -61,3 +61,25 @@ build environment. Do not carry that policy into device APT configuration.
 Bind-mount disposable source and artifact directories at build time. The image
 contains tooling and dependencies, not maintained service code, a fat JAR or
 package outputs. Signing credentials do not belong in this container.
+
+## Debian source ownership
+
+- `packages/status-ready/debian/` packages the SDK's `k230-status-ready`
+  helper as `Architecture: all`. Include the SDK's root `LICENSE` with its
+  upstream source. Debhelper installs and manages the systemd unit; the package
+  does not ship a pre-created enablement symlink. Set
+  `K230_STATUS_READY_SYSFS` to a writable temporary file when exercising the
+  helper without hardware.
+- `packages/sharp-drm/debian/` defines `k230-sharp-drm` and `k230-kernel-abi`,
+  both for `riscv64`. The module requires the marker at exactly its own version.
+  Kbuild supplies the module bytes; stripping is disabled. The modules-load
+  entry and `mono_cutoff=64` parameter remain package-owned.
+- The service's canonical `debian/` defines the fourth binary,
+  `cyberdeck-service`, for `riscv64`. Build from that recipe, including its
+  dependency-license verification. Retain the generated dependency-source
+  reports as corresponding-source artifacts; a clean Git export alone does
+  not include the downloaded dependency sources.
+
+All three source packages use `3.0 (quilt)`. Their Debian metadata and upstream
+source archives are separate inputs to `dpkg-source`; keep both components
+with the generated `.dsc`.

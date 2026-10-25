@@ -1,0 +1,15 @@
+Source: k230-status-ready
+Section: utils
+Priority: optional
+Maintainer: Andrew D'Angelo <dangeloandrew@outlook.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+Homepage: https://github.com/ardangelo/k230-linux
+
+Package: k230-status-ready
+Architecture: all
+Depends: ${misc:Depends}
+Description: Mark the K230 system ready for its power controller
+ Writes the K230 status driver ready attribute once local filesystems are
+ available. The systemd unit is enabled and maintained by debhelper.

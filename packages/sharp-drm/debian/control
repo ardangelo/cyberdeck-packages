@@ -1,0 +1,22 @@
+Source: sharp-drm
+Section: kernel
+Priority: optional
+Maintainer: Andrew D'Angelo <dangeloandrew@outlook.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+Homepage: https://github.com/ardangelo/sharp-drm-driver
+
+Package: k230-kernel-abi
+Architecture: riscv64
+Depends: ${misc:Depends}
+Description: K230 kernel ABI marker
+ Records the exact configured K230 kernel release used by out-of-tree module
+ packages. It does not provide a kernel image.
+
+Package: k230-sharp-drm
+Architecture: riscv64
+Depends: ${misc:Depends}, kmod, k230-kernel-abi (= ${binary:Version})
+Description: Sharp memory-display DRM module for K230
+ K230 ABI-specific Sharp memory-display DRM kernel module, compiled from the
+ repository's canonical source against the selected prepared kernel tree.

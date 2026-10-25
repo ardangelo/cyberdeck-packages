@@ -1,0 +1,5 @@
+sharp-drm (1.7-1) unstable; urgency=medium
+
+  * Build an ABI-specific K230 binary module package.
+
+ -- Andrew D'Angelo <dangeloandrew@outlook.com>  Sun, 26 Jul 2026 00:00:00 +0000

@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = remove ] || [ "$1" = purge ]; then
+    if command -v depmod >/dev/null 2>&1; then
+        depmod -a @KERNEL_RELEASE@
+    fi
+fi
+
+#DEBHELPER#
+
+exit 0

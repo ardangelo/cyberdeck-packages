@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = configure ] && command -v depmod >/dev/null 2>&1; then
+    depmod -a @KERNEL_RELEASE@
+fi
+
+#DEBHELPER#
+
+exit 0

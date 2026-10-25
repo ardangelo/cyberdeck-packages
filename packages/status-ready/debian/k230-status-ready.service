@@ -1,0 +1,11 @@
+[Unit]
+Description=Mark K230 status ready for nRF power controller
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/k230-status-ready 1
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
