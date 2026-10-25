@@ -158,6 +158,8 @@ hardware boot test.
 ## Immutable Releases and APT publication
 
 `ci.yml` builds and verifies pull requests and `main` without signing secrets.
+Build failures include captured command diagnostics in public check annotations;
+full job logs remain in Actions. No signing secrets enter these build jobs.
 `release.yml` accepts a manual positive release number on `main`, runs the same
 three unprivileged builds and target verification, then enters `apt-publish`
 only for archival. `archive-release.py` creates a draft `packages-vN` at the

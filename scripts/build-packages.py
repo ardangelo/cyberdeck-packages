@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from typing import Any
 from urllib.parse import urlsplit
@@ -63,7 +64,12 @@ def validate_lock(value: Any) -> dict[str, Any]:
 
 
 def run(command: list[str], *, cwd: Path | None = None, capture: bool = False, env: dict[str, str] | None = None) -> str:
-    result = subprocess.run(command, cwd=cwd, env=env, text=True, stdout=subprocess.PIPE if capture else None, check=True)
+    result = subprocess.run(command, cwd=cwd, env=env, text=True,
+                            stdout=subprocess.PIPE if capture else None,
+                            stderr=subprocess.PIPE if capture else None)
+    if capture and result.stderr:
+        print(result.stderr, end="", file=sys.stderr)
+    result.check_returncode()
     return result.stdout.strip() if capture else ""
 
 
@@ -234,7 +240,7 @@ def build(selector: str, number: int, output_root: Path, lock: dict[str, Any]) -
         context = None
         if selector == "sharp-drm":
             conf = lock["sdk"]["conf"]
-            docker(image, work, ["make", "-C", "/build/sdk", f"CONF={conf}", "linux"], environment={"SOURCE_DATE_EPOCH": str(sdk_epoch)}, capture=False)
+            docker(image, work, ["make", "-C", "/build/sdk", f"CONF={conf}", "linux"], environment={"SOURCE_DATE_EPOCH": str(sdk_epoch)})
             raw = docker(image, work, ["python3", "/package-scripts/kernel-context.py", "--sdk-root", "/build/sdk", "--conf", conf])
             context = json.loads(raw)
             require(context["conf"] == conf and HEX.fullmatch(context["abi_sha256"]) is not None, "invalid configured kernel context")
@@ -321,10 +327,13 @@ def main() -> None:
         record = build(args.package, number, args.output.resolve(), lock)
         print(json.dumps({"package": record["package"], "artifacts": len(record["artifacts"])}, sort_keys=True))
     except (ValueError, OSError, subprocess.CalledProcessError, RuntimeError, KeyError) as error:
+        detail = str(error)
+        if isinstance(error, subprocess.CalledProcessError):
+            detail += "".join(f"\n{stream[-8000:]}" for stream in (error.stdout, error.stderr) if stream)
         if os.environ.get("GITHUB_ACTIONS") == "true":
-            message = str(error).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+            message = detail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
             print(f"::error::{message}")
-        parser.exit(1, f"build-packages: {error}\n")
+        parser.exit(1, f"build-packages: {detail}\n")
 
 
 if __name__ == "__main__":
