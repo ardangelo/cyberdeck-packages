@@ -168,6 +168,8 @@ not source-built release artifacts and cannot enter the archive.
 `ci.yml` builds and verifies pull requests and `main` without signing secrets.
 Build failures include captured command diagnostics in public check annotations;
 full job logs remain in Actions. No signing secrets enter these build jobs.
+Target-smoke failures also emit public check annotations without passing signing
+secrets or repository-write credentials into the privileged rootfs process.
 `release.yml` accepts a manual positive release number on `main`, runs the same
 three unprivileged builds and target verification, then enters `apt-publish`
 only for archival. `archive-release.py` creates a draft `packages-vN` at the

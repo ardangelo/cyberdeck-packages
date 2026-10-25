@@ -439,6 +439,9 @@ def main():
     try:
         proof = smoke(args.input.resolve(), args.output.resolve())
     except (ValueError, KeyError, OSError, RuntimeError, subprocess.SubprocessError) as error:
+        if os.environ.get('GITHUB_ACTIONS') == 'true':
+            message = str(error).replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+            print(f'::error::{message}')
         parser.exit(1, f'package-smoke: {error}\n')
     print(f'RISC-V package smoke passed for release {proof["release_number"]}; evidence: {args.output}/package-smoke.json')
 

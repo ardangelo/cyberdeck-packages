@@ -90,7 +90,7 @@ jobs:
           RELEASE_NUMBER: ${{ inputs.release_number }}
         run: python3 scripts/verify-artifacts.py --artifacts incoming --output verified --release-number "$RELEASE_NUMBER"
       - name: Exercise real target package transactions
-        run: sudo python3 scripts/smoke-packages.py --input verified --output smoke-evidence
+        run: sudo env GITHUB_ACTIONS=true python3 scripts/smoke-packages.py --input verified --output smoke-evidence
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: verified-packages
