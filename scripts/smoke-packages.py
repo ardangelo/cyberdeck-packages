@@ -18,7 +18,7 @@ import stat
 import subprocess
 import tempfile
 
-from release_support import (PACKAGE_ARCHES, basename, canonical, inspect_deb,
+from release_support import (PACKAGE_ARCHES, basename, canonical, expected_versions, inspect_deb,
                              load_json, require, sha256, validate_cohort,
                              validate_context)
 
@@ -347,6 +347,40 @@ def jni(root, lock, temporary):
             'init_dev_null_disconnect_destroy': True}
 
 
+def same_abi_upgrade(root, binaries, number, context, temporary):
+    """Upgrade real payloads/scripts with fixture-only next-cohort control metadata."""
+    versions = expected_versions(number + 1, context['abi_sha256'])
+    destination = root / 'tmp/cyberdeck-upgrade-fixtures'
+    destination.mkdir()
+    upgrades = {}
+    for name, row in sorted(binaries.items()):
+        unpacked = temporary / ('upgrade-' + name)
+        command(['dpkg-deb', '--raw-extract', root / 'tmp/cyberdeck-input' / row['file'], unpacked])
+        control = unpacked / 'DEBIAN/control'
+        text, count = re.subn(r'^Version: .+$', 'Version: ' + versions[name],
+                              control.read_text(), flags=re.MULTILINE)
+        require(count == 1, f'upgrade fixture lacks a unique version: {name}')
+        if name == 'k230-sharp-drm':
+            dependency = f'k230-kernel-abi (= {row["version"]})'
+            require(text.count(dependency) == 1, 'upgrade fixture marker dependency differs')
+            text = text.replace(dependency, f'k230-kernel-abi (= {versions["k230-kernel-abi"]})')
+        control.write_text(text)
+        package = destination / (name + '-upgrade-fixture.deb')
+        command(['dpkg-deb', '--root-owner-group', '--build', unpacked, package])
+        upgrades[name] = inspect_deb(package) | {'kind': 'deb', 'file': package.name,
+                                               'size': package.stat().st_size, 'sha256': sha256(package)}
+    validate_cohort(list(upgrades.values()), number + 1, context['abi_sha256'])
+    target(root, '/usr/bin/apt-get', '-y', '--no-install-recommends', 'install',
+           *('/tmp/cyberdeck-upgrade-fixtures/' + row['file'] for row in upgrades.values()))
+    installed(root, upgrades)
+    for unit in ('k230-status-ready.service', 'cyberdeck-service.service'):
+        systemd_enabled(root, unit)
+    return {'fixture_only': True,
+            'from_versions': {name: row['version'] for name, row in sorted(binaries.items())},
+            'installed_versions': {name: row['version'] for name, row in sorted(upgrades.items())},
+            'dpkg_audit': 'empty'}
+
+
 def smoke(directory, output):
     require(os.geteuid() == 0, 'smoke requires root for isolated rootfs and chroot')
     require(not output.exists(), 'evidence output must not exist')
@@ -371,20 +405,27 @@ def smoke(directory, output):
         ready = readiness(root, binaries['k230-status-ready'])
         guards, module = abi_guards(root, binaries, context)
         module_proof = module_checks(root, module, context)
+        payloads = [module, root / JAR, root / 'usr/bin/cyberdeck_daemon',
+                    root / 'usr/bin/k230-status-ready']
+        hashes = {path: sha256(path) for path in payloads}
+        upgrade = same_abi_upgrade(root, binaries, verified['release_number'], context, temporary)
+        require(all(sha256(path) == digest for path, digest in hashes.items()),
+                'same-ABI upgrade changed a compiled payload or readiness helper')
+        module_checks(root, module, context)
         bridge = jni(root, verified['sources']['lock'], temporary)
-        installed(root, binaries)
         evidence = {'schema_version': 1, 'release_number': verified['release_number'],
                     'snapshot': verified['sources']['lock']['debian_snapshot'],
                     'target_runtime': RUNTIME,
                     'kernel_context_sha256': sha256(directory / 'kernel-context.json'),
                     'abi_sha256': context['abi_sha256'],
-                    'installed': {name: {key: row[key] for key in
+                    'baseline_installed': {name: {key: row[key] for key in
                                  ('package', 'version', 'architecture', 'depends', 'sha256')}
                                   for name, row in sorted(binaries.items())},
                     'dpkg_audit_empty': True,
                     'systemd_units_enabled': ['k230-status-ready.service', 'cyberdeck-service.service'],
                     'dependency_closure': closure, 'readiness': ready,
-                    'abi_guard_rejections': guards, 'module': module_proof, 'jni': bridge}
+                    'abi_guard_rejections': guards, 'module': module_proof, 'jni': bridge,
+                    'same_abi_upgrade': upgrade}
         output.mkdir(parents=True, exist_ok=False)
         (output / 'package-smoke.json').write_bytes(canonical(evidence) + b'\n')
     return evidence

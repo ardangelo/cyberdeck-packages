@@ -158,6 +158,11 @@ It exercises readiness, ABI guards, module metadata and packaged-JAR JNI
 initialization. QEMU `/dev/null` initialization is not a UART, display or
 hardware boot test.
 
+The smoke also repackages the built payloads and maintainer scripts with
+next-cohort control versions to exercise a real four-package same-ABI upgrade.
+These explicitly labeled fixtures stay in disposable smoke staging; they are
+not source-built release artifacts and cannot enter the archive.
+
 ## Immutable Releases and APT publication
 
 `ci.yml` builds and verifies pull requests and `main` without signing secrets.
