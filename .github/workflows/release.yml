@@ -70,7 +70,9 @@ jobs:
       - name: Install verification and QEMU host tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends mmdebstrap qemu-user-static openjdk-21-jdk-headless g++-riscv64-linux-gnu kmod systemd gnupg dpkg-dev debian-archive-keyring
+          sudo apt-get install -y --no-install-recommends mmdebstrap qemu-user-static binfmt-support openjdk-21-jdk-headless g++-riscv64-linux-gnu kmod systemd gnupg dpkg-dev debian-archive-keyring
+      - name: Enable RISC-V binfmt for target chroot execution
+        run: sudo update-binfmts --enable qemu-riscv64
       - name: Run isolated behavioral tests
         run: python3 -m unittest discover -s tests -v
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093

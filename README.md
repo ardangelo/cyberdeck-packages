@@ -149,6 +149,10 @@ The target smoke requires `mmdebstrap`, the Debian archive keyring, static
 RISC-V QEMU with working binfmt registration, a RISC-V C++ compiler, GnuPG,
 native `systemctl`, kmod, root privileges and permission to mount read-only `/proc`.
 Use a capable Linux host or container; there is no mountless PRoot fallback.
+CI and release verification explicitly install `binfmt-support` and run
+`sudo update-binfmts --enable qemu-riscv64` after installing QEMU. Installing the
+emulator alone is not sufficient; the smoke still requires actual target
+`/bin/true` execution through the registered handler inside its chroot.
 It extracts the signed base archives, completes mmdebstrap's essential stage
 and requires a configured, dependency-consistent dpkg database before installing
 the cohort. The essential stage uses upstream mmdebstrap's bootstrap-only
