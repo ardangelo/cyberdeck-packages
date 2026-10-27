@@ -13,9 +13,12 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tarfile
 from typing import Any
 from urllib.parse import urlsplit
 
+from build_cache import cache_keys
+from build_state import load_image, load_kernel, load_package, save_image, save_kernel, save_package
 from release_support import release_number, require, sha256
 from sources import archive, export, fetch, git, validate_revision
 
@@ -107,9 +110,9 @@ def stage_debian(destination: Path, selector: str, version: str, epoch: int, con
             script.write_text(content)
 
 
-def build_image(selector: str, lock: dict[str, Any]) -> str:
+def build_image(selector: str, lock: dict[str, Any], *, key: str | None = None) -> str:
     kind = "kernel" if selector == "sharp-drm" else "service"
-    image = f"cyberdeck-packages-{kind}:{lock['containers'][kind].split('@sha256:')[1][:20]}"
+    image = f"cyberdeck-packages-{kind}:{key.rsplit('-', 1)[-1][:24] if key else lock['containers'][kind].split('@sha256:')[1][:20]}"
     arguments = {"BASE_IMAGE": lock["containers"][kind]}
     if kind == "service":
         arguments["DEBIAN_SNAPSHOT"] = lock["debian_snapshot"]
@@ -125,9 +128,11 @@ def build_image(selector: str, lock: dict[str, Any]) -> str:
     return image
 
 
-def docker(image: str, work: Path, command: list[str], *, environment: dict[str, str] | None = None, capture: bool = True) -> str:
+def docker(image: str, work: Path, command: list[str], *, environment: dict[str, str] | None = None, capture: bool = True, gradle_home: Path | None = None) -> str:
     args = ["docker", "run", "--rm", "--user", f"{os.getuid()}:{os.getgid()}", "--network", "bridge", "--mount", f"type=bind,source={work},target=/build", "--mount", f"type=bind,source={ROOT / 'scripts'},target=/package-scripts,readonly", "-w", "/build"]
-    for name, value in {"HOME": "/build", "GRADLE_USER_HOME": "/build/gradle-home", **(environment or {})}.items():
+    if gradle_home is not None:
+        args.extend(["--mount", f"type=bind,source={gradle_home},target=/gradle-home"])
+    for name, value in {"HOME": "/build", "GRADLE_USER_HOME": "/gradle-home" if gradle_home is not None else "/build/gradle-home", **(environment or {})}.items():
         args.extend(["-e", f"{name}={value}"])
     return run([*args, image, *command], capture=capture)
 
@@ -202,14 +207,28 @@ def check_gradle_pin(service: Path, lock: dict[str, Any]) -> None:
     require(properties.get("distributionUrl", "").replace("\\:", ":") == lock["tools"]["gradle"]["url"], "canonical Gradle URL differs from source lock")
     require(properties.get("distributionSha256Sum") == lock["tools"]["gradle"]["sha256"], "canonical Gradle SHA-256 differs from source lock")
 
-def build(selector: str, number: int, output_root: Path, lock: dict[str, Any]) -> dict[str, Any]:
+def build(selector: str, number: int, output_root: Path, lock: dict[str, Any], cache_dir: Path | None = None) -> dict[str, Any]:
     selected = output_root / selector
     require(not selected.exists() or not any(selected.iterdir()), f"selected output must be empty: {selected}")
+    cache = cache_keys(ROOT, selector, number, lock) if cache_dir is not None else None
+    package_cache = cache_dir / "packages" / cache["package"] if cache is not None else None
+    if package_cache is not None and (package_cache.exists() or package_cache.is_symlink()):
+        return load_package(package_cache, selected, selector, number, lock, PACKAGES)
     selected.mkdir(parents=True, exist_ok=True)
     source_name, upstream, expected = PACKAGES[selector]
     with tempfile.TemporaryDirectory(prefix=f"cyberdeck-{selector}-", dir=selected) as temporary:
         work = Path(temporary)
-        image = build_image(selector, lock)
+        if cache is None:
+            image = build_image(selector, lock)
+        else:
+            kind = "kernel" if selector == "sharp-drm" else "service"
+            image = f"cyberdeck-packages-{kind}:{cache['image'].rsplit('-', 1)[-1][:24]}"
+            image_cache = cache_dir / "images" / cache["image"]
+            if image_cache.exists() or image_cache.is_symlink():
+                load_image(image_cache, cache["image"], kind, lock, image, run)
+            else:
+                image = build_image(selector, lock, key=cache["image"])
+                save_image(image_cache, cache["image"], kind, lock, image, run)
         sdk: Path | None = None
         submodules: list[dict[str, str]] = []
         if selector == "cyberdeck-service":
@@ -240,11 +259,19 @@ def build(selector: str, number: int, output_root: Path, lock: dict[str, Any]) -
         context = None
         if selector == "sharp-drm":
             conf = lock["sdk"]["conf"]
-            docker(image, work, ["make", "-C", "/build/sdk", f"CONF={conf}", "linux"], environment={"SOURCE_DATE_EPOCH": str(sdk_epoch)})
+            kernel_cache = cache_dir / "kernels" / cache["kernel"] if cache is not None else None
+            if kernel_cache is not None and (kernel_cache.exists() or kernel_cache.is_symlink()):
+                cached_context = load_kernel(kernel_cache, cache["kernel"], sdk, conf, lock)
+            else:
+                docker(image, work, ["make", "-C", "/build/sdk", f"CONF={conf}", "linux"], environment={"SOURCE_DATE_EPOCH": str(sdk_epoch)})
+                cached_context = None
             raw = docker(image, work, ["python3", "/package-scripts/kernel-context.py", "--sdk-root", "/build/sdk", "--conf", conf])
             context = json.loads(raw)
             require(context["conf"] == conf and HEX.fullmatch(context["abi_sha256"]) is not None, "invalid configured kernel context")
-            (work / "kernel-context.json").write_text(json.dumps(context, sort_keys=True, indent=2) + "\n")
+            if cached_context is not None:
+                require(context == cached_context, "restored prepared kernel context differs from cached identity")
+            elif kernel_cache is not None:
+                save_kernel(kernel_cache, cache["kernel"], sdk, conf, context, lock)
             version = f"{upstream}+cyberdeck.{number}+abi.{context['abi_sha256']}-1"
         else:
             version = f"{upstream}+cyberdeck.{number}-1"
@@ -281,7 +308,21 @@ def build(selector: str, number: int, output_root: Path, lock: dict[str, Any]) -
         docker(image, work, ["dpkg-source", "-x", f"/build/{source_name}_{version}.dsc", "/build/extracted"], environment=variables, capture=False)
         binary = work / "extracted"
         host = ["--host-arch=riscv64"] if selector != "status-ready" else []
-        docker(image, work, ["sh", "-c", "cd /build/extracted && exec dpkg-buildpackage --build=binary -us -uc " + " ".join(host)], environment=variables, capture=False)
+        gradle_home = None
+        if selector == "cyberdeck-service" and cache_dir is not None:
+            gradle_home = cache_dir / "gradle"
+            require(not gradle_home.is_symlink(), "Gradle cache directory must not be a symlink")
+            gradle_home.mkdir(parents=True, exist_ok=True)
+            require(not any((gradle_home / name).exists() or (gradle_home / name).is_symlink()
+                            for name in ("init.d", "init.gradle", "init.gradle.kts")),
+                    "Gradle cache must not inject initialization scripts")
+            properties = gradle_home / "gradle.properties"
+            require(not properties.is_symlink(), "Gradle cache properties must not be a symlink")
+            provisioning = docker(image, work, ["cat", "/opt/gradle-home/gradle.properties"])
+            require("org.gradle.java.installations.auto-download=false" in provisioning,
+                    "container must disable implicit Gradle toolchain downloads")
+            properties.write_text(provisioning + "\norg.gradle.caching=true\n")
+        docker(image, work, ["sh", "-c", "cd /build/extracted && exec dpkg-buildpackage --build=binary -us -uc " + " ".join(host)], environment=variables, capture=False, gradle_home=gradle_home)
         if selector == "cyberdeck-service":
             corresponding_sources(binary, work, source_name, upstream_version, epoch)
         if context is not None:
@@ -310,7 +351,9 @@ def build(selector: str, number: int, output_root: Path, lock: dict[str, Any]) -
         if context is not None:
             record["kernel_context"] = {"file": "kernel-context.json", "sha256": sha256(selected / "kernel-context.json")}
         (selected / f"{selector}-build.json").write_text(json.dumps(record, sort_keys=True, indent=2) + "\n")
-        return record
+    if package_cache is not None:
+        save_package(package_cache, selected, selector, number, lock, PACKAGES)
+    return record
 
 
 def main() -> None:
@@ -319,14 +362,15 @@ def main() -> None:
     parser.add_argument("--release-number", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--development", action="store_true", help="allow release number zero in CI only")
+    parser.add_argument("--cache-dir", type=Path, help="reuse verified package, image, SDK kernel and Gradle state")
     args = parser.parse_args()
     try:
         require(not args.development or os.environ.get("CI") == "true", "development release requires CI")
         number = release_number(args.release_number, development=args.development)
         lock = validate_lock(json.loads((ROOT / "source-lock.json").read_text()))
-        record = build(args.package, number, args.output.resolve(), lock)
+        record = build(args.package, number, args.output.resolve(), lock, args.cache_dir.resolve() if args.cache_dir is not None else None)
         print(json.dumps({"package": record["package"], "artifacts": len(record["artifacts"])}, sort_keys=True))
-    except (ValueError, OSError, subprocess.CalledProcessError, RuntimeError, KeyError) as error:
+    except (ValueError, TypeError, OSError, subprocess.CalledProcessError, RuntimeError, KeyError, tarfile.TarError) as error:
         detail = str(error)
         if isinstance(error, subprocess.CalledProcessError):
             detail += "".join(f"\n{stream[-8000:]}" for stream in (error.stdout, error.stderr) if stream)
