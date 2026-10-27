@@ -79,12 +79,20 @@ jobs:
     timeout-minutes: 180
     environment: apt-publish
     permissions:
-      contents: write
+      contents: read
       actions: read
     concurrency:
       group: cyberdeck-package-archive
       cancel-in-progress: false
     steps:
+      - name: Require workflow-authorized publication token
+        env:
+          GH_TOKEN: ${{ secrets.APT_RELEASE_TOKEN }}
+        run: |
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo 'Set apt-publish secret APT_RELEASE_TOKEN with repository Contents: write, Workflows: write, and Actions: read; GITHUB_TOKEN cannot publish an older target with changed workflow files.' >&2
+            exit 1
+          fi
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.sha }}
@@ -102,7 +110,7 @@ jobs:
         env:
           RELEASE_NUMBER: ${{ inputs.release_number }}
           SOURCE_RUN_ID: ${{ inputs.source_run_id }}
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.APT_RELEASE_TOKEN }}
           APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
           APT_GPG_PASSPHRASE: ${{ secrets.APT_GPG_PASSPHRASE }}
           APT_GPG_SIGNING_FINGERPRINT: ${{ vars.APT_GPG_SIGNING_FINGERPRINT }}

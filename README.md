@@ -294,6 +294,22 @@ Configure GitHub manually before the first release:
    `github-pages` receives no signing key. Release archival alone has
    `contents: write`; assembly has `contents: read`; deployment alone has
    `pages: write` and `id-token: write`.
+6. For **Recover release**, create a fine-grained personal access token restricted
+   to **this repository only**, with **Contents: read and write**,
+   **Workflows: read and write**, and **Actions: read-only**. Store it only as
+   environment secret `APT_RELEASE_TOKEN` in `apt-publish`, not as a repository
+   secret or in `github-pages`. Use a short expiry; revoke it after recovery or
+   rotate it before expiry if retained for future recovery.
+
+GitHub requires workflow-write authorization when a release's older target
+commit changes workflow files relative to current default-branch contents,
+including when publishing an existing draft. Its built-in `GITHUB_TOKEN` cannot
+receive that permission; see
+[Update a release](https://docs.github.com/en/rest/releases/releases#update-a-release).
+The recovery job therefore requires `APT_RELEASE_TOKEN`, without a fallback to
+the built-in token. Only the protected archive step receives it for API calls;
+the recovery prepare job uses a read-only built-in token, and target smoke
+receives neither token. Normal release archival still uses `GITHUB_TOKEN`.
 
 Create the real repository-specific key on a trusted maintainer machine, not
 in Actions or the package-build container. Use Bash, an interactive secure
