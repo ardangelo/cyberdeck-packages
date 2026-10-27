@@ -286,6 +286,10 @@ def load_kernel(cache: Path, key: str, sdk: Path, conf: str, lock: dict) -> dict
         require(any(name.endswith("/Module.symvers") for name in names), "cached SDK has no compiled module symbols")
         require(not any(any(str(parent) in symlinks for parent in PurePosixPath(name).parents) for name in names),
                 "cached SDK entry passes through a symlink")
-        input_archive.extractall(sdk, filter="fully_trusted")
+        # Python 3.10 and early 3.11 lack the filter API; validation above is identical.
+        if hasattr(tarfile, "fully_trusted_filter"):
+            input_archive.extractall(sdk, filter="fully_trusted")
+        else:
+            input_archive.extractall(sdk)
     _snapshot_paths(sdk, conf, context)
     return context
