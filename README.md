@@ -168,6 +168,44 @@ next-cohort control versions to exercise a real four-package same-ABI upgrade.
 These explicitly labeled fixtures stay in disposable smoke staging; they are
 not source-built release artifacts and cannot enter the archive.
 
+### Reusing unchanged work
+
+Normal **Package CI** and **Package release** jobs use GitHub Actions caches.
+They still upload a complete cohort from the current run, then run full artifact
+verification and real target installation smoke without signing credentials.
+They never archive a retained artifact from an older workflow run.
+
+- **Package outputs:** an exact key covers the selected package, release number,
+  full source lock, selected Debian recipe, build helpers and their file modes.
+  A hit checks the complete artifact set, SHA-256 values and actual Debian control
+  metadata before copying into fresh output. CI's number `0` cannot supply
+  release-number `1` binaries, and cached packages are never relabeled.
+- **Build containers:** Docker image archives use the selected Dockerfile and
+  locked build arguments, independently of the package release number.
+- **Prepared kernel:** a complete prepared SDK output snapshot uses the SDK
+  revision/configuration, kernel container, toolchain and build helpers. A new
+  release number or service/Sharp source revision alone does not rebuild it.
+  The builder fetches the locked SDK sources and recomputes the full kernel
+  context after restoration; generic headers are not a substitute.
+- **Gradle:** dependency and task caches cross release numbers and compatible
+  service revisions. Strict dependency verification and the locked Java/Android
+  toolchains remain required; downloaded Java toolchains and cached init scripts
+  are not permitted.
+
+Publication scripts, dedicated verification/smoke scripts and documentation are
+not build inputs. Changes confined to those files reuse matching package outputs.
+Each GitHub job has its own cache workspace; PR cache writes cannot become
+trusted `main` cache entries.
+
+For sequential local reuse, append `--cache-dir .cache/cyberdeck` to each builder
+command above. Continue using a fresh `--output` directory for every invocation.
+Give concurrent local invocations separate cache directories.
+
+Caches are disposable, not Release storage: a missing or evicted entry causes
+a cold build. An existing corrupt or mismatched entry fails closed; delete that
+entry in **Actions → Caches** (or the matching local cache directory) before
+rebuilding. No cache setting, extra token or signing secret is needed in build jobs.
+
 ## Immutable Releases and APT publication
 
 `ci.yml` builds and verifies pull requests and `main` without signing secrets.
@@ -183,8 +221,9 @@ release enumeration; GitHub's tag-based release lookup returns published
 releases only. A draft may have no Git tag until publication, but its
 `target_commitish` must match the pinned commit. Any existing tag must also match,
 including immediately before publication. The archive verifies draft assets
-through authenticated asset IDs, publishes only the complete cohort, then checks
-immutability, the exact Git tag commit and public asset bytes.
+through authenticated asset IDs rather than treating their browser URLs as final
+tag URLs. It publishes only the complete cohort, then checks immutability, the
+exact Git tag commit and public asset bytes with strict final URL validation.
 
 Every archive retains all four binaries, the three complete Debian sources,
 corresponding-source reports, `.changes`, `.buildinfo`, kernel context, signed
@@ -194,12 +233,37 @@ existing release. Conflicting drafts or same-version/different-byte releases
 fail without overwriting assets. An identical immutable archive is idempotent;
 changed source commits or bytes require a new release number.
 
-Resume an interrupted archive only with the same publication commit and verified
-artifacts. A rerun uses the original workflow commit, not newer code on `main`.
-After an orchestration change, a maintainer may explicitly delete an empty,
-unpublished draft with no Git tag before starting a fresh workflow for that
-unused release number. Never delete or retarget a published release or existing
-tag; a nonempty conflicting draft requires a new release number.
+For a fresh start after merging build-cache support:
+
+1. Wait for **Package CI** on `main` to pass. Its first run seeds trusted caches;
+   a PR's cache cannot seed `main`.
+2. Discard the failed run's **unpublished draft** if it is no longer needed.
+   Never delete or retarget an existing tag or a published immutable Release.
+3. Dispatch **Package release** on current `main` with an unused positive release
+   number above every published `packages-vN`. Reuse the failed draft's number
+   only if that draft has been deleted and no tag exists for the number;
+   otherwise choose a new number. Keep workflow files unchanged until archival
+   completes.
+
+The release needs newly versioned packages rather than CI's number-`0` binaries,
+but can reuse the prepared kernel, build containers and Gradle state. Subsequent
+same-input builds reuse exact package outputs as well. Signing setup is unchanged:
+normal archival uses the built-in `GITHUB_TOKEN`; no personal access token is needed.
+
+For later failures:
+
+- **Same workflow code:** Actions **Re-run failed jobs** retains successful jobs,
+  but uses the original commit, not newer code on `main`.
+- **Publication code fixed on `main`:** dispatch a fresh **Package release**.
+  Matching build caches avoid recompilation. A conflicting nonempty draft needs
+  the draft/number decision above; immutable Releases and tags stay untouched.
+- **Already immutable; only Pages publication failed:** dispatch **Publish APT**
+  on `main` with `dry_run` disabled. It reads public Releases and needs no
+  retained build artifact.
+
+Build and verified transport artifacts expire after one day. Their expiry does
+not prevent a fresh workflow from using build caches; caches have their own
+eviction policy. Public immutable Releases remain the durable source of truth.
 
 `publish.yml` reconstructs Pages from immutable public Releases, not a previous
 deployment, cache, state branch or Actions artifact. It verifies the signed
