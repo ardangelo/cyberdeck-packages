@@ -177,14 +177,16 @@ Target-smoke failures also emit public check annotations without passing signing
 secrets or repository-write credentials into the privileged rootfs process.
 `release.yml` accepts a manual positive release number on `main`, runs the same
 three unprivileged builds and target verification, then enters `apt-publish`
-only for archival. `archive-release.py` pins the signed manifest and draft
-`packages-vN` to the checked-out main commit. Draft lookup uses authenticated
+only for archival. `archive-release.py` normally pins the signed manifest and
+draft `packages-vN` to the checked-out main commit. Recovery preserves the
+original producing commit instead. Draft lookup uses authenticated
 release enumeration; GitHub's tag-based release lookup returns published
 releases only. A draft may have no Git tag until publication, but its
 `target_commitish` must match the pinned commit. Any existing tag must also match,
 including immediately before publication. The archive verifies draft assets
-through authenticated asset IDs, publishes only the complete cohort, then checks
-immutability, the exact Git tag commit and public asset bytes.
+through authenticated asset IDs rather than treating their browser URLs as final
+tag URLs. It publishes only the complete cohort, then checks immutability, the
+exact Git tag commit and public asset bytes with strict final URL validation.
 
 Every archive retains all four binaries, the three complete Debian sources,
 corresponding-source reports, `.changes`, `.buildinfo`, kernel context, signed
@@ -194,12 +196,42 @@ existing release. Conflicting drafts or same-version/different-byte releases
 fail without overwriting assets. An identical immutable archive is idempotent;
 changed source commits or bytes require a new release number.
 
-Resume an interrupted archive only with the same publication commit and verified
-artifacts. A rerun uses the original workflow commit, not newer code on `main`.
-After an orchestration change, a maintainer may explicitly delete an empty,
-unpublished draft with no Git tag before starting a fresh workflow for that
-unused release number. Never delete or retarget a published release or existing
-tag; a nonempty conflicting draft requires a new release number.
+Choose the retry path that matches the failed stage:
+
+- **Same workflow code:** use Actions **Re-run failed jobs**. Retained successful
+  jobs need not rebuild, but the rerun uses the original commit, not newer code
+  on `main`.
+- **Archive orchestration fixed on `main`:** dispatch **Recover release** on
+  `main`, setting `release_number` to the original number and `source_run_id`
+  to the original **Package release** run ID. It does not build containers or
+  compile packages.
+- **Already immutable; only Pages publication failed:** dispatch **Publish APT**
+  on `main` with `dry_run` disabled. It reads public Releases and needs no
+  retained build artifact.
+
+Recovery accepts only a completed manual release from this repository's `main`
+with successful original build and target-verification jobs and exactly one
+unexpired `verified-packages` artifact. Its producing commit must be an ancestor
+of current protected `main`. Source locks, container definitions, package
+definitions, build helpers and file modes must match; the release workflow's
+build job and top-level environment/defaults must also match semantically.
+Changes confined to publication/recovery scripts, documentation or dedicated
+verification/smoke scripts do not force a rebuild. Recovery and the behavioral
+test suite require PyYAML
+(`python3-yaml` on Debian/Ubuntu); the workflows install it.
+
+The prepare job checks GitHub's ZIP SHA-256 and size, validates the complete
+cohort and reruns real target installation smoke without signing credentials.
+The protected archive job independently rechecks provenance and the original
+ZIP before signing. It preserves the original publication commit, allowing a
+matching populated draft and its existing signature to resume without deleting,
+retargeting or replacing assets.
+
+Build and verified transport artifacts expire after one day. Missing or expired
+artifacts and changed build inputs reject recovery; use a fresh **Package
+release** build instead. Normal CI and release builds remain fresh builds.
+Never delete or retarget a published release or existing tag. A nonempty draft
+whose commit or bytes conflict requires a new release number.
 
 `publish.yml` reconstructs Pages from immutable public Releases, not a previous
 deployment, cache, state branch or Actions artifact. It verifies the signed

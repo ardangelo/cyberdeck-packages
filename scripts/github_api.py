@@ -82,11 +82,12 @@ class GitHub:
 
     def asset(self, release, entry, destination, digest, size):
         require(type(entry['id']) is int and entry['id'] > 0 and entry['size'] == size, 'release asset identity/size mismatch')
-        check_asset_url(entry['browser_download_url'], release['tag_name'], entry['name'], self.repository)
         if release['draft']:
+            # Draft browser URLs can contain a placeholder tag; fetch by authenticated asset ID.
             url = self.root + f'/releases/assets/{entry["id"]}'
             headers = self.headers('application/octet-stream')
         else:
+            check_asset_url(entry['browser_download_url'], release['tag_name'], entry['name'], self.repository)
             url = entry['browser_download_url']
             headers = None
         return download(url, destination, digest, size, headers=headers)
@@ -94,12 +95,13 @@ class GitHub:
     def metadata(self, release, entry, destination, *, limit=4 * 1024 * 1024):
         """Fetch a still-untrusted manifest/signature; caller MUST verify the signature."""
         require(entry['name'] in {'release-manifest.json', 'release-manifest.json.asc'}, 'unverified fetch is limited to signed metadata')
+        require(type(entry['id']) is int and entry['id'] > 0, 'signed metadata asset identity mismatch')
         require(type(entry['size']) is int and 0 < entry['size'] <= limit, 'signed metadata exceeds size limit')
-        check_asset_url(entry['browser_download_url'], release['tag_name'], entry['name'], self.repository)
         if release['draft']:
             url = self.root + f'/releases/assets/{entry["id"]}'
             headers = self.headers('application/octet-stream')
         else:
+            check_asset_url(entry['browser_download_url'], release['tag_name'], entry['name'], self.repository)
             url = entry['browser_download_url']
             headers = {'User-Agent': 'cyberdeck-packages'}
         with self.opener.open(Request(url, headers=headers), timeout=120) as response:

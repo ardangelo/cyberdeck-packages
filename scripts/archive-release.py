@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import zipfile
 
 from github_api import GitHub
 from release_support import (asset_url, basename, canonical, inspect_deb,
@@ -240,12 +241,17 @@ def archive(api, artifacts, number, config, public_key, *, head):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--artifacts', type=Path, required=True)
+    transport = parser.add_mutually_exclusive_group(required=True)
+    transport.add_argument('--artifacts', type=Path)
+    transport.add_argument('--source-artifact', type=Path)
+    parser.add_argument('--source-run-id', type=int)
     parser.add_argument('--release-number', required=True)
     parser.add_argument('--repository-config', type=Path, required=True)
     parser.add_argument('--public-key', type=Path, required=True)
     args = parser.parse_args()
     try:
+        require((args.source_artifact is None) == (args.source_run_id is None),
+                '--source-artifact and --source-run-id must be supplied together')
         number = release_number(args.release_number)
         config = repository_config(args.repository_config)
         require(os.environ.get('GITHUB_REPOSITORY') == config['repository'],
@@ -254,8 +260,16 @@ def main():
         api = GitHub(config['repository'])
         require(api.token, 'archive requires authenticated GitHub API access')
         head = git_source(api)
-        tag = archive(api, args.artifacts, number, config, args.public_key, head=head)
-    except (ValueError, KeyError, OSError, RuntimeError, subprocess.CalledProcessError) as error:
+        if args.source_artifact is not None:
+            from recovery import extract_verified, source_build
+            source = source_build(api, args.source_run_id, Path(__file__).resolve().parents[1], head)
+            with tempfile.TemporaryDirectory(prefix='cyberdeck-recovery-', dir=os.environ.get('RUNNER_TEMP')) as temporary:
+                artifacts = extract_verified(args.source_artifact, source, Path(temporary) / 'verified')
+                tag = archive(api, artifacts, number, config, args.public_key, head=source['head_sha'])
+        else:
+            tag = archive(api, args.artifacts, number, config, args.public_key, head=head)
+    except (ValueError, KeyError, OSError, RuntimeError, ImportError, zipfile.BadZipFile,
+            zipfile.LargeZipFile, subprocess.CalledProcessError) as error:
         parser.exit(1, f'archive-release: {error}\n')
     print(f'archived immutable {tag}')
 
