@@ -177,10 +177,14 @@ Target-smoke failures also emit public check annotations without passing signing
 secrets or repository-write credentials into the privileged rootfs process.
 `release.yml` accepts a manual positive release number on `main`, runs the same
 three unprivileged builds and target verification, then enters `apt-publish`
-only for archival. `archive-release.py` creates a draft `packages-vN` at the
-checked-out main commit, signs the manifest, verifies uploaded draft assets
-through authenticated asset IDs, and publishes only the complete cohort.
-It checks immutable status and public asset bytes after publication.
+only for archival. `archive-release.py` pins the signed manifest and draft
+`packages-vN` to the checked-out main commit. Draft lookup uses authenticated
+release enumeration; GitHub's tag-based release lookup returns published
+releases only. A draft may have no Git tag until publication, but its
+`target_commitish` must match the pinned commit. Any existing tag must also match,
+including immediately before publication. The archive verifies draft assets
+through authenticated asset IDs, publishes only the complete cohort, then checks
+immutability, the exact Git tag commit and public asset bytes.
 
 Every archive retains all four binaries, the three complete Debian sources,
 corresponding-source reports, `.changes`, `.buildinfo`, kernel context, signed
@@ -189,6 +193,13 @@ manifest and `snapshot-Packages`. The golden index uses final paths
 existing release. Conflicting drafts or same-version/different-byte releases
 fail without overwriting assets. An identical immutable archive is idempotent;
 changed source commits or bytes require a new release number.
+
+Resume an interrupted archive only with the same publication commit and verified
+artifacts. A rerun uses the original workflow commit, not newer code on `main`.
+After an orchestration change, a maintainer may explicitly delete an empty,
+unpublished draft with no Git tag before starting a fresh workflow for that
+unused release number. Never delete or retarget a published release or existing
+tag; a nonempty conflicting draft requires a new release number.
 
 `publish.yml` reconstructs Pages from immutable public Releases, not a previous
 deployment, cache, state branch or Actions artifact. It verifies the signed

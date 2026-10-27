@@ -158,20 +158,21 @@ def archive(api, artifacts, number, config, public_key, *, head):
         signature = stage / 'release-manifest.json.asc'
         files = paths | {index.name: index, manifest_file.name: manifest_file}
         releases = api.releases()
-        existing = api.release(tag)
         known = [r for r in releases if isinstance(r.get('tag_name'), str) and RELEASE_TAG.fullmatch(r['tag_name'])]
         require(len({r['tag_name'] for r in known}) == len(known), 'duplicate release tags')
-        require(existing is None or any(r['id'] == existing['id'] for r in known), 'tagged release omitted from release enumeration')
+        existing = next((release for release in known if release['tag_name'] == tag), None)
         if existing is None or existing['draft'] is True:
             for release in known:
                 match = RELEASE_TAG.fullmatch(release['tag_name'])
                 if release['id'] != (existing or {}).get('id'):
                     require(int(match[1]) < number, 'release number must exceed all existing package releases')
+        # Drafts pin target_commitish; GitHub may create their tag only at publication.
         remote_tag = tag_commit(api, tag)
         require(remote_tag is None or remote_tag == head, 'Git tag commit differs from checked-out main')
         if existing is not None:
             release_identity(existing, tag, head)
-            require(remote_tag == head, 'existing release lacks matching Git tag')
+            if existing['draft'] is False:
+                require(remote_tag == head, 'published release lacks matching Git tag')
             remote = api.assets(existing)
             require(set(remote) <= set(files) | {signature.name}, 'draft/published release has unexpected assets')
             with tempfile.TemporaryDirectory(prefix='cyberdeck-check-', dir=os.environ.get('RUNNER_TEMP')) as check_dir:
@@ -209,7 +210,7 @@ def archive(api, artifacts, number, config, public_key, *, head):
                         'name': tag, 'draft': True, 'prerelease': False})
             release_identity(existing, tag, head)
             require(existing['draft'] is True, 'new release is not a draft')
-            require(tag_commit(api, tag) == head, 'new release tag differs from checked-out main')
+            require(tag_commit(api, tag) in (None, head), 'new release tag differs from checked-out main')
             remote = api.assets(existing)
             require(not remote, 'new draft unexpectedly contains assets')
         for name, path in files.items():
@@ -222,6 +223,7 @@ def archive(api, artifacts, number, config, public_key, *, head):
         with tempfile.TemporaryDirectory(prefix='cyberdeck-draft-proof-', dir=os.environ.get('RUNNER_TEMP')) as check_dir:
             for name, path in files.items():
                 check_remote_asset(api, existing, remote[name], path, Path(check_dir))
+        require(tag_commit(api, tag) in (None, head), 'Git tag commit differs before publication')
         updated = api.json('PATCH', f'/releases/{existing["id"]}', {'draft': False})
         require(updated['draft'] is False, 'GitHub did not publish release')
         published = api.release(tag)
