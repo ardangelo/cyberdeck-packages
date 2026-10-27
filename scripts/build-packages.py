@@ -272,6 +272,7 @@ def build(selector: str, number: int, output_root: Path, lock: dict[str, Any], c
                 require(context == cached_context, "restored prepared kernel context differs from cached identity")
             elif kernel_cache is not None:
                 save_kernel(kernel_cache, cache["kernel"], sdk, conf, context, lock)
+            (work / "kernel-context.json").write_text(raw + "\n")
             version = f"{upstream}+cyberdeck.{number}+abi.{context['abi_sha256']}-1"
         else:
             version = f"{upstream}+cyberdeck.{number}-1"
