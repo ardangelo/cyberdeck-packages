@@ -36,7 +36,8 @@ class MemoryGitHub:
         return list(self.records.values())
 
     def release(self, tag):
-        return self.records.get(tag)
+        record = self.records.get(tag)
+        return record if record is not None and not record['draft'] else None
 
     def assets(self, release):
         return {name: {'id': i, 'name': name, 'size': len(payload),
@@ -57,11 +58,11 @@ class MemoryGitHub:
                       'prerelease': False, 'immutable': False}
             self.next_id += 1
             self.records[tag] = record
-            self.tags[tag] = data['target_commitish']
             self.contents[tag] = {}
             return record
         if method == 'PATCH':
             record = next(r for r in self.records.values() if path == f'/releases/{r["id"]}')
+            self.tags.setdefault(record['tag_name'], record['target_commitish'])
             record.update({'draft': False, 'immutable': True})
             return record
         raise AssertionError((method, path))
@@ -257,6 +258,50 @@ class ArchiveBehavior(unittest.TestCase):
         self.api.contents['packages-v1']['snapshot-Packages'] = b'conflict'
         before = copy.deepcopy(self.api.contents['packages-v1'])
         with self.assertRaises((ValueError, AssertionError)):
+            self.perform()
+        self.assertEqual(self.api.contents['packages-v1'], before)
+
+    def test_unpublished_draft_without_tag_resumes_after_interruption(self):
+        upload = self.api.upload
+
+        def interrupted_upload(release, path):
+            upload(release, path)
+            raise RuntimeError('interrupted asset upload')
+
+        with patch.object(self.api, 'upload', side_effect=interrupted_upload):
+            with self.assertRaisesRegex(RuntimeError, 'interrupted asset upload'):
+                self.perform()
+        self.assertTrue(self.api.records['packages-v1']['draft'])
+        self.assertNotIn('packages-v1', self.api.tags)
+        retained = copy.deepcopy(self.api.contents['packages-v1'])
+        self.assertEqual(self.perform(), 'packages-v1')
+        for name, payload in retained.items():
+            self.assertEqual(self.api.contents['packages-v1'][name], payload)
+            self.assertEqual(self.api.uploaded.count(name), 1)
+        self.assertFalse(self.api.records['packages-v1']['draft'])
+        self.assertTrue(self.api.records['packages-v1']['immutable'])
+        self.assertEqual(self.api.tags['packages-v1'], HEAD)
+
+    def test_tag_conflict_during_upload_prevents_publication(self):
+        upload = self.api.upload
+
+        def conflicting_upload(release, path):
+            result = upload(release, path)
+            self.api.tags[release['tag_name']] = 'e' * 40
+            return result
+
+        with patch.object(self.api, 'upload', side_effect=conflicting_upload):
+            with self.assertRaisesRegex(ValueError, 'Git tag commit'):
+                self.perform()
+        self.assertTrue(self.api.records['packages-v1']['draft'])
+        self.assertFalse(self.api.records['packages-v1']['immutable'])
+        self.assertEqual(self.api.tags['packages-v1'], 'e' * 40)
+
+    def test_published_release_requires_matching_tag(self):
+        self.perform()
+        before = copy.deepcopy(self.api.contents['packages-v1'])
+        del self.api.tags['packages-v1']
+        with self.assertRaisesRegex(ValueError, 'published release lacks matching Git tag'):
             self.perform()
         self.assertEqual(self.api.contents['packages-v1'], before)
 
