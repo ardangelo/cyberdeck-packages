@@ -104,9 +104,11 @@ class BuildCacheKeys(unittest.TestCase):
     def test_binary_build_inputs_cannot_alias_an_added_helper(self):
         helper = self.root / "scripts/a"
         helper.write_bytes(b"prefix\0scripts/b\0file:0644\0payload")
+        helper.chmod(0o644)
         initial = self.keys()
         helper.write_bytes(b"prefix")
         (self.root / "scripts/b").write_bytes(b"payload")
+        (self.root / "scripts/b").chmod(0o644)
         self.assertNotEqual(self.keys()["package"], initial["package"])
 
     def test_symlink_target_bytes_are_inputs_and_outside_checkout_targets_rejected(self):
