@@ -8,6 +8,13 @@ on:
         required: false
         type: boolean
         default: false
+    secrets:
+      APT_GPG_PRIVATE_KEY:
+        description: Base64 signing subkey; needed only for signed publication
+        required: false
+      APT_GPG_PASSPHRASE:
+        description: Signing subkey passphrase; needed only for signed publication
+        required: false
   workflow_dispatch:
     inputs:
       dry_run:

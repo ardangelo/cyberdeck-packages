@@ -176,3 +176,6 @@ jobs:
       pages: write
       id-token: write
     uses: ./.github/workflows/publish.yml
+    secrets:
+      APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+      APT_GPG_PASSPHRASE: ${{ secrets.APT_GPG_PASSPHRASE }}
