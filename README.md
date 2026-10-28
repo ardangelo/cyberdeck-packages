@@ -299,6 +299,10 @@ binaries under an existing version:
 gh workflow run publish.yml --repo ardangelo/cyberdeck-packages --ref main
 ```
 
+A standalone dispatch can also recover a completed archive when its reusable
+publication call failed to receive signing secrets; do not recreate the key
+or rebuild the archived packages.
+
 The manual `dry_run` option validates and assembles without environments,
 signing secrets or deployment. Its unsigned output is not deployable APT.
 The public endpoint is `https://ardangelo.github.io/cyberdeck-packages/`.
@@ -326,6 +330,12 @@ Configure GitHub manually before the first release:
    `github-pages` receives no signing key. Release archival alone has
    `contents: write`; assembly has `contents: read`; deployment alone has
    `pages: write` and `id-token: write`.
+
+The release caller explicitly passes only these two named secrets to the
+reusable publisher. GitHub requires this even for environment-only secrets;
+the assembly job resolves their values from `apt-publish`. Dry runs need no
+signing material. Keep the values in that protected environment, not in
+repository secrets, workflow inputs or logs.
 
 Create the real repository-specific key on a trusted maintainer machine, not
 in Actions or the package-build container. Use Bash, an interactive secure
