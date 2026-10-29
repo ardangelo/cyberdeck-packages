@@ -6,7 +6,7 @@
   },
   "sdk": {
     "repository": "https://github.com/ardangelo/k230-linux.git",
-    "revision": "5ae48d5709cbcdb4db9a161e24b222fd9cfbedae",
+    "revision": "787820213200465c332f3474323e0d28711351c1",
     "conf": "k230_canmv_01studio_defconfig"
   },
   "sharp": {
