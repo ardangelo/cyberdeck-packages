@@ -61,7 +61,8 @@ def kernel_inputs(sdk, defconfig, config):
     configured = shlex.split(config_value(defconfig, 'BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES'))
     if fragments != configured:
         raise ValueError('prepared kernel board fragment differs from selected defconfig')
-    paths = {defconfig.relative_to(sdk)}
+    # Buildroot application selections do not identify the prepared kernel ABI.
+    paths = set()
     for fragment in fragments:
         relative = Path('buildroot-overlay') / fragment
         if fragment.startswith('/') or '..' in Path(fragment).parts:

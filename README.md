@@ -131,9 +131,13 @@ generic headers or `modules_prepare` as a substitute. It downloads and verifies
 the locked Xuantie archive rather than requiring an untracked build-context
 file. `scripts/kernel-context.py --sdk-root SDK --conf
 k230_canmv_01studio_defconfig` resolves the prepared kernel and emits its context.
-The ABI covers the kernel source revision/release, actual configuration and
-symbols, authored kernel inputs and compiler identity/bytes. It excludes SDK
-commit, build paths, package versions and timestamps.
+The ABI covers the kernel source revision/release, actual kernel configuration
+and symbols, selected kernel fragments, authored kernel overlay and compiler
+identity/bytes. It excludes the whole Buildroot board defconfig: changing AI or
+other application selections alone does not change the identity. The selected
+kernel source revision and fragment paths must still agree with the prepared
+configuration. SDK commit, build paths, package versions and timestamps are
+also excluded.
 
 The kernel container provides `wget` for SDK source downloads, alongside `curl`
 for the checksum-verified toolchain download.
@@ -144,6 +148,11 @@ with a final newline. Neither package owns that file or supplies a kernel.
 The marker carries its expected context at
 `/usr/share/k230-kernel-abi/kernel-context.json`. A different ABI requires a
 different image and APT suite even if `kernel_release` stays the same.
+
+Migrating from the former whole-defconfig hash changes the identity once.
+Publish a new release for that corrected identity before building consumer
+images with the matching tool. Existing immutable releases retain their original
+identities and suites; do not rewrite them or substitute their ABI in new images.
 
 The target smoke requires `mmdebstrap`, the Debian archive keyring, static
 RISC-V QEMU with working binfmt registration, a RISC-V C++ compiler, GnuPG,

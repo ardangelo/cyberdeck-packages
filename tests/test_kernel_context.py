@@ -24,13 +24,15 @@ class KernelContextTests(unittest.TestCase):
         self.compiler = self.toolchain / 'bin/riscv64-unknown-linux-gnu-gcc'
         self.file('buildroot-overlay/configs/' + CONF,
                   'BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION="' + REVISION + '"\n'
-                  'BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="board/canaan/k230-soc/fragment/linux.fragment"\n')
+                  'BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="board/canaan/k230-soc/fragment/linux.fragment"\n'
+                  '# BR2_PACKAGE_FACE_DETECTION is not set\n')
         self.file('buildroot-overlay/board/canaan/k230-soc/fragment/linux.fragment', 'CONFIG_DRM=y\n')
         self.file('buildroot-overlay/linux/board.patch', 'diff --git a/a b/a\n')
         self.file('output/' + CONF + '/.config',
                   'BR2_DEFCONFIG="buildroot-overlay/configs/' + CONF + '"\n'
                   'BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION="' + REVISION + '"\n'
                   'BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="board/canaan/k230-soc/fragment/linux.fragment"\n'
+                  '# BR2_PACKAGE_FACE_DETECTION is not set\n'
                   'BR2_TOOLCHAIN_EXTERNAL_PATH="' + str(self.toolchain) + '"\n'
                   'BR2_TOOLCHAIN_EXTERNAL_PREFIX="riscv64-unknown-linux-gnu"\n')
         self.file('output/' + CONF + '/Makefile',
@@ -73,7 +75,6 @@ class KernelContextTests(unittest.TestCase):
             (self.kernel / 'Module.symvers', 'a changed symbol\n', 'module_symvers_sha256'),
             (self.sdk / 'buildroot-overlay/linux/board.patch', 'different authored patch\n', 'kernel_inputs_sha256'),
             (self.sdk / 'buildroot-overlay/board/canaan/k230-soc/fragment/linux.fragment', 'CONFIG_DRM=m\n', 'kernel_inputs_sha256'),
-            (self.sdk / 'buildroot-overlay/configs' / CONF, 'BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION="' + REVISION + '"\nBR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="board/canaan/k230-soc/fragment/linux.fragment"\n# selected input changed\n', 'kernel_inputs_sha256'),
             (self.compiler, '#!/bin/sh\nprintf "other compiler 14.0\\n"\n', 'compiler_identity'),
             (self.compiler, '#!/bin/sh\nprintf "Xuantie compiler 14.0\\n"\n# new compiler bytes\n', 'compiler_sha256'),
         ]:
@@ -87,6 +88,15 @@ class KernelContextTests(unittest.TestCase):
         fields = {key: value for key, value in baseline.items() if key != 'abi_sha256'}
         expected = hashlib.sha256(json.dumps(fields, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
         self.assertEqual(baseline['abi_sha256'], expected)
+
+    def test_ai_package_selection_does_not_change_kernel_context(self):
+        baseline = self.context()
+        for path in (self.sdk / 'buildroot-overlay/configs' / CONF,
+                     self.sdk / 'output' / CONF / '.config'):
+            path.write_text(path.read_text().replace(
+                '# BR2_PACKAGE_FACE_DETECTION is not set',
+                'BR2_PACKAGE_FACE_DETECTION=y'))
+        self.assertEqual(self.context(), baseline)
 
     def test_kernel_revision_provenance_and_ignored_generated_inputs(self):
         baseline = self.context()
