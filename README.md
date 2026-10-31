@@ -288,6 +288,9 @@ Generated suites:
 - `trixie-k230-H-release-N`: the fixed image cohort, with byte-identical golden
   `Packages` and deterministic `Packages.gz`.
 
+Live-index assembly normalizes the newlines between cohorts so adjacent Debian
+control paragraphs remain separated by one blank line.
+
 Both use fresh signed `Release`, `InRelease` and `Release.gpg` metadata with a
 14-day validity window. The Monday/Thursday refresh changes freshness and
 signatures, not snapshot package/index bytes. There is no `trusted=yes`,
