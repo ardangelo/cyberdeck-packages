@@ -259,7 +259,7 @@ def assemble(api, output, key, config, withdrawn_path, *, dry_run=False, now=Non
                                 config['signing_fingerprint'])
                 live.setdefault(manifest['suite'], []).append(index)
         for suite, indices in live.items():
-            combined = b'\n'.join(indices)
+            combined = b'\n\n'.join(index.strip(b'\n') for index in indices) + b'\n\n'
             write_suite(site, suite, combined, now, signer, key, config['signing_fingerprint'])
             for fields in paragraphs(combined):
                 binary = site / fields['Filename']
